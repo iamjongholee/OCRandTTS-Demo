@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>CBNU OCR & TTS</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .main {
+        width: 100vw;
+        height: 100vh;
+        background-color: #a5b7bd;
+      }
+      .body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+      }
+      .sub-title {
+        color: #666;
+      }
+      .button-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      button {
+        padding: 10px;
+        border-radius: 10px;
+        border: 0;
+        background-color: white;
+        margin-right: 10px;
+        box-shadow: rgba(0, 0, 0, 0.1) 0px 4px 12px;
+      }
+      .disabled {
+        cursor: not-allowed;
+        pointer-events: none;
+        background-color: #999;
+      }
+      .tts-container {
+        width: 30vw;
+        min-height: 50vh;
+        display: flex;
+        background-color: white;
+        margin-top: 30px;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: rgba(149, 157, 165, 0.2) 0px 8px 24px;
+      }
+      .f5 {
+        margin-top: 30px;
+      }
+    </style>
+    <script
+      src="https://code.jquery.com/jquery-1.12.4.min.js"
+      integrity="sha256-ZosEbRLbNQzLpnKIkEdrPv7lOy9C27hHQ+Xp8a4MxAQ="
+      crossorigin="anonymous"
+    ></script>
+
+    <script>
+      var latestFileName = "";
+
+      // About audio
+      var audio;
+      var isPlaying = false;
+      var isAudioInitialized = false;
+
+      $("document").ready(function () {
+        $(".file-upload").click(function (e) {
+          e.preventDefault();
+
+          $("#img").click();
+        });
+
+        $(".download-button").click(function (e) {
+          var isDisabledDownloadButton =
+            $(".download-button").hasClass("disabled");
+
+          if (!isDisabledDownloadButton) {
+            handleFileDownload(latestFileName);
+          }
+        });
+
+        $(".play-button").click(function (e) {
+          var isDisabledDownloadButton = $(".play-button").hasClass("disabled");
+
+          if (!isDisabledDownloadButton) {
+            handlePlayMP3(latestFileName);
+          }
+        });
+
+        /** Buttons will be disabled when initialized */
+        $(".play-button").toggleClass("disabled");
+        $(".download-button").toggleClass("disabled");
+      });
+
+      function handleOnChange(event) {
+        var form = $("#img-form")[0];
+        var formData = new FormData(form);
+
+        $.ajax({
+          processData: false,
+          contentType: false,
+          url: "/upload",
+          type: "POST",
+          data: formData,
+          success: function (res) {
+            console.log("성공: ");
+            console.log(res);
+            if (res.text) {
+              // Play MP3 file from TTS, Download MP3 file from TTS able
+              $(".play-button").toggleClass("disabled");
+              $(".download-button").toggleClass("disabled");
+
+              // Replace the text
+              $(".tts-text").text(res.text);
+              latestFileName = res.ts_hms;
+            }
+          },
+          error: function (res) {
+            console.log("실패: ");
+            console.log(res);
+          },
+        });
+
+        return false;
+      }
+
+      function handleFileDownload(fileName) {
+        $.ajax({
+          type: "GET",
+          url: "/download",
+          data: { fileName },
+          success: function (data) {
+            const data2 = base64ToBuffer(data.base64);
+            const blob = new Blob([data2], { type: "audio/mp3" });
+
+            var link = document.createElement("a");
+            link.href = window.URL.createObjectURL(blob);
+
+            const audio = new Audio();
+            audio.src = link.download = `${latestFileName}.mp3`;
+
+            link.click();
+            link.remove();
+          },
+        });
+
+        return false;
+      }
+
+      function handlePlayMP3(fileName) {
+        if (!isAudioInitialized) {
+          audio = new Audio(`sounds/${latestFileName}.mp3`);
+
+          isAudioInitialized = true;
+        }
+
+        if (!isPlaying) {
+          audio.play();
+        } else {
+          audio.pause();
+        }
+
+        isPlaying = !isPlaying;
+      }
+
+      var base64ToBuffer = function (buffer) {
+        var binary = window.atob(buffer);
+        var buffer = new ArrayBuffer(binary.length);
+        var bytes = new Uint8Array(buffer);
+        for (var i = 0; i < buffer.byteLength; i++) {
+          bytes[i] = binary.charCodeAt(i) & 0xff;
+        }
+        return buffer;
+      };
+    </script>
+  </head>
+
+  <body>
+    <div class="main">
+      <div class="body">
+        <h1>CBNU OCR & TTS</h1>
+        <p class="sub-title">Extract or Scan text from image
+          <br>(이미지에서 텍스트 추출 또는 스캔)
+        </p>
+        <div class="button-container">
+          <button class="file-upload">Upload Image<br>(이미지 업로드)</button>
+          <button class="play-button">Play MP3 file from TTS<br>(이미지의 텍스트를 MP3로 재생)</button>
+          <button class="download-button">Download MP3 file from TTS<br>(변환된 MP3 파일을 다운로드)</button>
+        </div>
+        <div class="tts-container">
+          <span class="tts-text"></span>
+        </div>
+        <div>
+          <button class="f5" onClick="window.location.reload()">새로고침</button>
+        </div>
+      </div>
+    </div>
+
+     <form
+      id="img-form"
+      action="/upload"
+      method="post"
+      enctype="multipart/form-data"
+    >
+      <label for="img"></label>
+      <input
+        type="file"
+        id="img"
+        name="img"
+        ,
+        accept="image/*"
+        onchange="handleOnChange(this)"
+      />
+      <input type="submit" value="제출" />
+    </form>
+  </body>
+</html>
